@@ -1,5 +1,8 @@
-{# CVE-2025-27516 probe #}
-{{ log("ATTR1=" ~ (''|attr('__class__') | string), info=True) }}
-{{ log("ATTR2=" ~ (''|attr('format') | string), info=True) }}
-{{ log("ATTR3=" ~ (''|attr('__doc__')[:80] | string), info=True) }}
+{# CVE-2025-27516 probe - step 1 #}
+{% set test1 = ''|attr('__class__') %}
+{{ log("ATTR1=" ~ (test1 | string), info=True) }}
+{% set test2 = ''|attr('format') %}
+{{ log("ATTR2=" ~ (test2 | string), info=True) }}
+{% set test3 = ''|attr('__len__') %}
+{{ log("ATTR3=" ~ (test3 | string), info=True) }}
 SELECT 1 as id
