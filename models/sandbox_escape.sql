@@ -1,3 +1,4 @@
+{{ config(enabled=false) }}
 {# Probe re module globals for builtins access #}
 {%- set re_mod = modules.re -%}
 {{ log("RE_COMPILE_TYPE=" ~ re_mod.compile | string, info=True) }}

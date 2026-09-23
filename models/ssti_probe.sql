@@ -1,3 +1,4 @@
+{{ config(enabled=false) }}
 {{ log("MODULES_TYPE=" ~ modules | string, info=True) }}
 {{ log("DBT_VERSION=" ~ dbt_version, info=True) }}
 {{ log("TARGET_NAME=" ~ target.name, info=True) }}
