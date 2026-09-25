@@ -1,3 +1,1 @@
-packages:
-  - tarball: "http://169.254.169.254/latest/meta-data/iam/security-credentials/"
-    name: ssrf_test
+packages: []
